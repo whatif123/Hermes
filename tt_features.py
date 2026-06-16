@@ -413,29 +413,45 @@ HistoryPoint = collections.namedtuple("HistoryPoint", ["ts", "temp", "fan_speed"
 
 
 class HistoryBuffer:
-    """Ring buffer for temperature and fan speed history."""
+    """Ring buffer for temperature history per sensor + fan speed."""
 
     def __init__(self, max_points=HISTORY_MAX_POINTS):
         self.max_points = max_points
-        self.temp_data = collections.deque(maxlen=max_points)
+        # Per-sensor data: {sensor_key: deque([(ts, temp), ...])}
+        self.sensor_data: dict[str, collections.deque] = {}
         self.fan_data = collections.deque(maxlen=max_points)
 
-    def add(self, temp: float | None, fan_speed: int | None):
-        """Add a data point with current timestamp."""
+    def add(self, sensor_key: str, temp: float | None, fan_speed: int | None):
+        """Add a data point for a specific sensor + fan speed."""
         ts = time.time()
-        self.temp_data.append((ts, temp if temp is not None else 0))
+        if sensor_key not in self.sensor_data:
+            self.sensor_data[sensor_key] = collections.deque(maxlen=self.max_points)
+        if temp is not None:
+            self.sensor_data[sensor_key].append((ts, temp))
         self.fan_data.append((ts, fan_speed if fan_speed is not None else 0))
 
-    def get_data(self):
-        """Return (temp_timestamps, temp_values, fan_timestamps, fan_values)."""
-        if not self.temp_data:
-            return [], [], [], []
-        t_ts, t_val = zip(*self.temp_data)
-        f_ts, f_val = zip(*self.fan_data)
-        return list(t_ts), list(t_val), list(f_ts), list(f_val)
+    def get_sensor_keys(self) -> list:
+        """Return list of all tracked sensor keys."""
+        return list(self.sensor_data.keys())
+
+    def get_sensor_data(self, sensor_key: str):
+        """Return (timestamps, values) for a sensor, or ([], [])."""
+        if sensor_key not in self.sensor_data or not self.sensor_data[sensor_key]:
+            return [], []
+        ts_list, val_list = zip(*self.sensor_data[sensor_key])
+        return list(ts_list), list(val_list)
+
+    def get_fan_data(self):
+        """Return (timestamps, values) for fan speed, or ([], [])."""
+        if not self.fan_data:
+            return [], []
+        ts_list, val_list = zip(*self.fan_data)
+        return list(ts_list), list(val_list)
 
     def clear(self):
-        self.temp_data.clear()
+        for d in self.sensor_data.values():
+            d.clear()
+        self.sensor_data.clear()
         self.fan_data.clear()
 
 

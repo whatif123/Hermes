@@ -1095,7 +1095,13 @@ if HAS_QT:
     # ── Graph Widget (pyqtgraph) ─────────────────────
     if HAS_PYQTGRAPH:
         class GraphWidget(QWidget):
-            """Live graph: temperature + fan speed over last hour."""
+            """Live graph: all sensor temperatures + fan speed over last hour."""
+
+            # Colors for different sensor curves
+            SENSOR_COLORS = [
+                '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+                '#1abc9c', '#e67e22', '#3498db', '#e91e63',
+            ]
 
             def __init__(self, history, auto_mode, controller, tt_log, parent=None):
                 super().__init__(parent)
@@ -1103,6 +1109,8 @@ if HAS_QT:
                 self.auto_mode = auto_mode
                 self.controller = controller
                 self.tt_log = tt_log
+                self._sensor_curves: dict[str, object] = {}
+                self._sensor_visible: dict[str, bool] = {}
                 self._setup_ui()
                 # Update graph every 3s
                 self._timer = QTimer(self)
@@ -1111,17 +1119,23 @@ if HAS_QT:
 
             def _setup_ui(self):
                 layout = QVBoxLayout(self)
+                layout.setSpacing(4)
 
                 # Info bar
                 info = QHBoxLayout()
-                self.temp_label = QLabel("Temp: --°C")
                 self.fan_label = QLabel("Fan: --%")
-                self.sensor_label = QLabel("Sensor: --")
-                info.addWidget(self.temp_label)
+                self.fan_label.setStyleSheet(
+                    "color: #3498db; font-weight: bold; font-size: 13px;")
                 info.addWidget(self.fan_label)
-                info.addWidget(self.sensor_label)
                 info.addStretch()
                 layout.addLayout(info)
+
+                # Sensor checkboxes row
+                self._checkbox_widget = QWidget()
+                self._checkbox_layout = QHBoxLayout(self._checkbox_widget)
+                self._checkbox_layout.setSpacing(8)
+                self._checkbox_layout.setContentsMargins(0, 0, 0, 0)
+                layout.addWidget(self._checkbox_widget)
 
                 # Plot
                 self.plot_widget = PlotWidget()
@@ -1131,12 +1145,7 @@ if HAS_QT:
                 self.plot_widget.setLabel('bottom', 'Time')
                 self.plot_widget.addLegend()
 
-                # Temperature curve (red)
-                self.temp_curve = self.plot_widget.plot(
-                    pen=pg.mkPen(color='#e74c3c', width=2),
-                    name='Temperatur (°C)'
-                )
-                # Fan speed curve (blue)
+                # Fan speed curve (blue, always visible)
                 self.fan_curve = self.plot_widget.plot(
                     pen=pg.mkPen(color='#3498db', width=2),
                     name='Lüfter (%)'
@@ -1156,29 +1165,53 @@ if HAS_QT:
                 curve_info.setStyleSheet("color: #888; font-size: 11px;")
                 layout.addWidget(curve_info)
 
+            def _ensure_sensor_curve(self, sensor_key: str):
+                """Create a curve for a new sensor if it doesn't exist."""
+                if sensor_key in self._sensor_curves:
+                    return
+                idx = len(self._sensor_curves) % len(self.SENSOR_COLORS)
+                color = self.SENSOR_COLORS[idx]
+                desc = get_sensor_description(sensor_key)
+                curve = self.plot_widget.plot(
+                    pen=pg.mkPen(color=color, width=2),
+                    name=desc
+                )
+                self._sensor_curves[sensor_key] = curve
+                self._sensor_visible[sensor_key] = True
+                # Add checkbox
+                cb = QCheckBox(desc)
+                cb.setChecked(True)
+                cb.setStyleSheet(f"color: {color}; font-size: 11px;")
+                cb.stateChanged.connect(lambda state, k=sensor_key: self._toggle_sensor(k, state))
+                self._checkbox_layout.addWidget(cb)
+
+            def _toggle_sensor(self, sensor_key: str, state):
+                """Toggle visibility of a sensor curve."""
+                self._sensor_visible[sensor_key] = (state == Qt.Checked)
+                if sensor_key in self._sensor_curves:
+                    self._sensor_curves[sensor_key].setVisible(self._sensor_visible[sensor_key])
+
             def _update(self):
                 """Update graph with latest history data."""
                 if not self.history:
                     return
-                t_ts, t_val, f_ts, f_val = self.history.get_data()
-                if not t_ts:
-                    return
 
-                # Convert timestamps to seconds ago for display
-                now = time.time()
-                t_x = [ts - now for ts in t_ts]
-                f_x = [ts - now for ts in f_ts]
+                # Update all sensor curves
+                for sensor_key in self.history.get_sensor_keys():
+                    self._ensure_sensor_curve(sensor_key)
+                    ts, vals = self.history.get_sensor_data(sensor_key)
+                    if ts and sensor_key in self._sensor_curves:
+                        now = time.time()
+                        x = [t - now for t in ts]
+                        self._sensor_curves[sensor_key].setData(x, vals)
 
-                self.temp_curve.setData(t_x, t_val)
-                self.fan_curve.setData(f_x, f_val)
-
-                # Update labels
-                if t_val:
-                    self.temp_label.setText(f"Temp: {t_val[-1]:.1f}°C")
-                if f_val:
-                    self.fan_label.setText(f"Fan: {f_val[-1]:.0f}%")
-                if self.auto_mode and self.auto_mode.current_sensor:
-                    self.sensor_label.setText(f"Sensor: {self.auto_mode.current_sensor}")
+                # Update fan curve
+                f_ts, f_vals = self.history.get_fan_data()
+                if f_ts:
+                    now = time.time()
+                    f_x = [t - now for t in f_ts]
+                    self.fan_curve.setData(f_x, f_vals)
+                    self.fan_label.setText(f"Fan: {f_vals[-1]:.0f}%")
 
 
     class MainWindow(QMainWindow):
@@ -1760,30 +1793,38 @@ if HAS_QT:
                     f"Konnte systemd Service nicht ändern:\n{e}")
 
         def _history_tick(self):
-            """Called every 3s — records current temp + fan speed for graph."""
+            """Called every 3s — records ALL sensor temps + fan speed for graph."""
             if not self.history:
                 return
-            # If auto mode is active, _auto_tick already recorded
-            if self.auto_mode and self.auto_mode.active:
-                return
-
-            # Read temperature: use auto_mode sensor if available, else try first sensor
-            temp = None
-            if self.auto_mode:
-                if self.auto_mode.current_sensor:
-                    temp = self.auto_mode.get_temperature()
-                elif self.auto_mode.available_sensors:
-                    # Auto-detect: use first available sensor for graph
-                    first_sensor = self.auto_mode.available_sensors[0]
-                    self.auto_mode.set_sensor(first_sensor)
-                    temp = self.auto_mode.get_temperature()
 
             # Get current fan speed from first channel widget (best-effort)
             fan_speed = 0
             if self.tab_widgets:
                 fan_speed = self.tab_widgets[0].speed_slider.value()
 
-            self.history.add(temp, fan_speed)
+            # Read ALL available sensors and record each one
+            if self.auto_mode:
+                readings = self.auto_mode.get_all_sensor_readings()
+                for r in readings:
+                    self.history.add(r['key'], r['temp'], fan_speed)
+            else:
+                self.history.add("unknown", None, fan_speed)
+
+        def _auto_tick(self):
+            """Called by QTimer — runs on GUI thread."""
+            if self.auto_mode:
+                result = self.auto_mode.tick()
+                if result:
+                    # Update history with ALL sensors for graph
+                    readings = self.auto_mode.get_all_sensor_readings()
+                    fan_spd = result.get("fan_speed", 0)
+                    for r in readings:
+                        self.history.add(r['key'], r['temp'], fan_spd)
+                    # Update live labels
+                    if hasattr(self, 'auto_temp_label'):
+                        self.auto_temp_label.setText(f"{result['temp']:.1f}°C")
+                    if hasattr(self, 'auto_fan_label'):
+                        self.auto_fan_label.setText(f"Fan: {result['fan_speed']}%")
 
         def closeEvent(self, event):
             # Stop timers

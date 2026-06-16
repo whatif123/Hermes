@@ -30,11 +30,11 @@ DEFAULT_PROFILES = {
     },
     "Balanced": {
         "channels": {
-            "0": {"fan_speed": 35, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
-            "1": {"fan_speed": 35, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
-            "2": {"fan_speed": 35, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
-            "3": {"fan_speed": 35, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
-            "4": {"fan_speed": 35, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
+            "0": {"fan_speed": 30, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
+            "1": {"fan_speed": 30, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
+            "2": {"fan_speed": 30, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
+            "3": {"fan_speed": 30, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
+            "4": {"fan_speed": 30, "mode": 0x19, "speed": 0x02, "color": [0, 200, 255]},
         }
     },
     "Gaming": {
@@ -178,12 +178,12 @@ except ImportError:
 
 # Fan curve: temp(C) -> fan_percent
 FAN_CURVE = [
-    (30, 20),   # Silent: ≤30°C → 20%
-    (40, 30),   # 40°C → 30%
-    (50, 45),   # 50°C → 45%
-    (60, 60),   # 60°C → 60%
-    (70, 80),   # 70°C → 80%
-    (80, 100),  # 80°C+ → 100%
+    (40, 20),   # Silent: ≤40°C → 20% (Idle ~45°C → ~22%)
+    (50, 30),   # 50°C → 30%
+    (60, 45),   # 60°C → 45%
+    (70, 65),   # 70°C → 65%
+    (80, 85),   # 80°C → 85%
+    (90, 100),  # 90°C+ → 100%
 ]
 
 # Minimum fan speed (hardware limit — below ~20% fans may stop)

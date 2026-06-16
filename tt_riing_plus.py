@@ -1716,28 +1716,27 @@ if HAS_QT:
             # Update auto fan speed label — always show current fan speed
             if self.auto_mode.active and self.auto_mode._last_fan_speed is not None:
                 self.auto_fan_label.setText(f"Fan: {self.auto_mode._last_fan_speed}%")
-            elif self.tab_widgets:
-                # Show manual fan speed from first channel slider
+            elif not self.auto_mode.active and self.tab_widgets:
+                # Show manual fan speed from first channel slider (only when auto is OFF)
                 manual_speed = self.tab_widgets[0].speed_slider.value()
                 self.auto_fan_label.setText(f"Fan: {manual_speed}%")
-            else:
-                self.auto_fan_label.setText("Fan: —%")
+            # else: keep current display (don't overwrite with "—%")
 
         def _auto_tick(self):
             """Called by QTimer — runs on GUI thread."""
             if self.auto_mode:
                 result = self.auto_mode.tick()
                 if result:
-                    # Update history
-                    if self.history:
-                        fan_spd = result.get("fan_speed")
-                        temp = result.get("temp")
-                        self.history.add(temp, fan_spd)
+                    # Update history with ALL sensors for graph
+                    readings = self.auto_mode.get_all_sensor_readings()
+                    fan_spd = result.get("fan_speed", 0)
+                    for r in readings:
+                        self.history.add(r['key'], r['temp'], fan_spd)
                     # Update live labels
                     if hasattr(self, 'auto_temp_label'):
                         self.auto_temp_label.setText(f"{result['temp']:.1f}°C")
                     if hasattr(self, 'auto_fan_label'):
-                        self.auto_fan_label.setText(f"Fan: {result['fan_speed']}%")
+                        self.auto_fan_label.setText(f"Fan: {fan_spd}%")
 
         def _update_autostart_button(self):
             """Check systemd status and update button label."""

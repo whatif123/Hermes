@@ -1634,8 +1634,7 @@ if HAS_QT:
             self.auto_sensor_combo.clear()
             readings = self.auto_mode.get_all_sensor_readings()
             for r in readings:
-                temp_str = f"{r['temp']:.1f}°C" if r['temp'] is not None else "N/A"
-                self.auto_sensor_combo.addItem(f"{r['key']} — {temp_str}", r['key'])
+                self.auto_sensor_combo.addItem(r['key'], r['key'])
             # Restore selection if possible
             if self.auto_mode.current_sensor:
                 idx = self.auto_sensor_combo.findData(self.auto_mode.current_sensor)

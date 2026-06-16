@@ -1696,13 +1696,22 @@ if HAS_QT:
                 parts.append(f"{desc}: {temp_str}{marker}")
             self.sensor_table_label.setText("Sensoren: " + " | ".join(parts))
 
-            # Update current temp label
-            if self.auto_mode.current_sensor:
+            # Update current temp label — always show k10temp_Tctl (AMD CPU) if available
+            cpu_temp = None
+            for r in readings:
+                if r['key'] == 'k10temp_Tctl':
+                    cpu_temp = r['temp']
+                    break
+            if cpu_temp is not None:
+                self.auto_temp_label.setText(f"{cpu_temp:.1f}°C")
+            elif self.auto_mode.current_sensor:
                 temp = self.auto_mode.get_temperature()
                 if temp is not None:
                     self.auto_temp_label.setText(f"{temp:.1f}°C")
                 else:
                     self.auto_temp_label.setText("—°C")
+            else:
+                self.auto_temp_label.setText("—°C")
 
             # Update auto fan speed label
             if self.auto_mode.active and self.auto_mode._last_fan_speed is not None:

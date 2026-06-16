@@ -199,8 +199,8 @@ AUTO_UPDATE_MS = 3000
 # Sensor name mapping: technical key -> human-readable description
 SENSOR_DESCRIPTIONS = {
     # AMD
-    "k10temp": "AMD CPU (K10)",
-    "k10temp_Tctl": "AMD CPU Kontroll-Temperatur",
+    "k10temp": "AMD CPU Kern",
+    "k10temp_Tctl": "AMD CPU",
     "k10temp_Tdie": "AMD CPU Die-Temperatur",
     # Intel
     "coretemp": "Intel CPU (Core)",

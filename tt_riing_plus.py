@@ -644,7 +644,8 @@ if HAS_QT:
             super().__init__(parent)
             self.led_count = led_count
             self.led_colors = [(255, 100, 0)] * led_count
-            self.setFixedSize(200, 200)
+            self.setFixedSize(120, 120)
+            self.setMinimumSize(120, 120)
             self.setToolTip("Riing Plus LED-Vorschau")
 
         def set_colors(self, colors):
@@ -721,10 +722,10 @@ if HAS_QT:
             header.addWidget(self.fan_label)
             layout.addLayout(header)
 
-            # ── Ring preview (compact) ──
+            # ── Ring preview (compact, left-aligned, fixed size) ──
             preview_box = QHBoxLayout()
+            preview_box.setSpacing(0)
             self.ring = RingWidget(LEDS_PER_FAN)
-            self.ring.setFixedSize(120, 120)
             preview_box.addWidget(self.ring)
             preview_box.addStretch()
             layout.addLayout(preview_box)
@@ -765,6 +766,8 @@ if HAS_QT:
             effect_group = QGroupBox("RGB-Effekt")
             ef = QGridLayout()
             ef.setColumnStretch(1, 1)
+            ef.setHorizontalSpacing(8)
+            ef.setVerticalSpacing(4)
 
             ef.addWidget(QLabel("Modus:"), 0, 0)
             self.effect_combo = QComboBox()
@@ -772,14 +775,14 @@ if HAS_QT:
                                                       MODE_BLINK, MODE_PULSE, MODE_WAVE,
                                                       MODE_PER_LED, MODE_FULL]]
             self.effect_combo.addItems(effect_names)
-            self.effect_combo.setMinimumWidth(120)
+            self.effect_combo.setMinimumWidth(160)
             self.effect_combo.currentTextChanged.connect(self._on_effect_changed)
             ef.addWidget(self.effect_combo, 0, 1)
 
-            ef.addWidget(QLabel("Geschwindigkeit:"), 1, 0)
+            ef.addWidget(QLabel("Tempo:"), 1, 0)
             self.efx_speed_combo = QComboBox()
             self.efx_speed_combo.addItems(list(EFFECT_SPEED_MAP.keys()))
-            self.efx_speed_combo.setMinimumWidth(100)
+            self.efx_speed_combo.setMinimumWidth(160)
             ef.addWidget(self.efx_speed_combo, 1, 1)
 
             effect_group.setLayout(ef)
@@ -1207,7 +1210,7 @@ if HAS_QT:
 
         def _setup_ui(self):
             self.setWindowTitle("Thermaltake Riing Plus — Linux Control")
-            self.setMinimumSize(780, 600)
+            self.setMinimumSize(820, 650)
             self.setStyleSheet("""
                 QMainWindow { background: #2b2b2b; }
                 QWidget   { color: #e0e0e0; font-size: 13px; }

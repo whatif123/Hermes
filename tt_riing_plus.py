@@ -1713,9 +1713,13 @@ if HAS_QT:
             else:
                 self.auto_temp_label.setText("—°C")
 
-            # Update auto fan speed label
+            # Update auto fan speed label — always show current fan speed
             if self.auto_mode.active and self.auto_mode._last_fan_speed is not None:
                 self.auto_fan_label.setText(f"Fan: {self.auto_mode._last_fan_speed}%")
+            elif self.tab_widgets:
+                # Show manual fan speed from first channel slider
+                manual_speed = self.tab_widgets[0].speed_slider.value()
+                self.auto_fan_label.setText(f"Fan: {manual_speed}%")
             else:
                 self.auto_fan_label.setText("Fan: —%")
 

@@ -690,7 +690,7 @@ if HAS_QT:
 
         def _setup_ui(self):
             layout = QVBoxLayout(self)
-            layout.setSpacing(6)
+            layout.setSpacing(4)
 
             # ── Channel header: icon + description + fan count ──
             header = QHBoxLayout()
@@ -722,52 +722,80 @@ if HAS_QT:
             header.addWidget(self.fan_label)
             layout.addLayout(header)
 
-            # ── Ring preview (compact, left-aligned, fixed size) ──
-            preview_box = QHBoxLayout()
-            preview_box.setSpacing(0)
+            # ── Ring + Apply Button (nebeneinander) ──
+            ring_apply_row = QHBoxLayout()
+            ring_apply_row.setSpacing(8)
             self.ring = RingWidget(LEDS_PER_FAN)
-            preview_box.addWidget(self.ring)
-            preview_box.addStretch()
-            layout.addLayout(preview_box)
+            ring_apply_row.addWidget(self.ring)
+            # Apply button neben den Ring
+            apply_btn = QPushButton("📤 Auf Kanal\nanwenden")
+            apply_btn.setStyleSheet(
+                "QPushButton { background-color: #e67e22; color: white; font-weight: bold; "
+                "padding: 6px 10px; border-radius: 6px; font-size: 11px; }"
+                "QPushButton:hover { background-color: #d35400; }"
+            )
+            apply_btn.setFixedSize(90, 60)
+            apply_btn.clicked.connect(self._apply)
+            ring_apply_row.addWidget(apply_btn)
+            ring_apply_row.addStretch()
+            layout.addLayout(ring_apply_row)
 
-            # ── Fan Speed ──
+            # ── Fan Speed (kompakt: Slider + Label + Presets in einer Zeile) ──
             speed_group = QGroupBox("Lüftergeschwindigkeit (PWM)")
             sl = QHBoxLayout()
+            sl.setSpacing(6)
             self.speed_slider = QSlider(Qt.Horizontal)
             self.speed_slider.setRange(0, 100)
             self.speed_slider.setValue(50)
-            self.speed_slider.setTickInterval(10)
+            self.speed_slider.setTickInterval(20)
             self.speed_slider.setTickPosition(QSlider.TicksBelow)
+            self.speed_slider.setMinimumWidth(180)
             self.speed_slider.valueChanged.connect(self._on_speed_changed)
-            self.speed_label = QLabel("50%")
-            self.speed_label.setMinimumWidth(40)
-            self.speed_label.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 14px;")
-            # Tooltip: controller state is write-only, values are not readable
             self.speed_slider.setToolTip(
                 "Hinweis: Der aktuelle Lüfterstand kann nicht vom Controller ausgelesen werden. "
                 "Der Wert wird beim Start auf 50% gesetzt.")
+            self.speed_label = QLabel("50%")
+            self.speed_label.setMinimumWidth(36)
+            self.speed_label.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 13px;")
             sl.addWidget(self.speed_slider)
             sl.addWidget(self.speed_label)
+            sl.addSpacing(8)
+            # Preset buttons inline
+            for name, val in FAN_SPEED_PRESETS.items():
+                btn = QPushButton(name)
+                btn.setStyleSheet("QPushButton { padding: 3px 8px; font-size: 10px; }")
+                btn.clicked.connect(partial(self._set_preset, val, name))
+                sl.addWidget(btn)
             speed_group.setLayout(sl)
             layout.addWidget(speed_group)
 
-            # Speed preset buttons
-            preset_row = QHBoxLayout()
-            for name, val in FAN_SPEED_PRESETS.items():
-                btn = QPushButton(name)
-                btn.setStyleSheet(
-                    "QPushButton { padding: 4px 10px; font-size: 11px; }"
-                )
-                btn.clicked.connect(partial(self._set_preset, val, name))
-                preset_row.addWidget(btn)
-            layout.addLayout(preset_row)
+            # ── LED Helligkeit (kompakt inline) ──
+            bright_row = QHBoxLayout()
+            bright_row.setSpacing(4)
+            bright_label_static = QLabel("💡 LED-Helligkeit:")
+            bright_label_static.setStyleSheet("color: #999; font-size: 11px;")
+            bright_row.addWidget(bright_label_static)
+            self.bright_slider = QSlider(Qt.Horizontal)
+            self.bright_slider.setRange(0, 100)
+            self.bright_slider.setValue(100)
+            self.bright_slider.setMinimumWidth(120)
+            self.bright_slider.setTickInterval(20)
+            self.bright_slider.setTickPosition(QSlider.TicksBelow)
+            self.bright_slider.valueChanged.connect(self._on_brightness_changed)
+            bright_row.addWidget(self.bright_slider)
+            self.bright_label = QLabel("100%")
+            self.bright_label.setMinimumWidth(36)
+            self.bright_label.setStyleSheet("color: #e67e22; font-weight: bold; font-size: 12px;")
+            bright_row.addWidget(self.bright_label)
+            bright_row.addStretch()
+            layout.addLayout(bright_row)
 
             # ── RGB Effect ──
             effect_group = QGroupBox("RGB-Effekt")
             ef = QGridLayout()
             ef.setColumnStretch(1, 1)
             ef.setHorizontalSpacing(8)
-            ef.setVerticalSpacing(4)
+            ef.setVerticalSpacing(2)
 
             ef.addWidget(QLabel("Modus:"), 0, 0)
             self.effect_combo = QComboBox()
@@ -775,63 +803,39 @@ if HAS_QT:
                                                       MODE_BLINK, MODE_PULSE, MODE_WAVE,
                                                       MODE_PER_LED, MODE_FULL]]
             self.effect_combo.addItems(effect_names)
-            self.effect_combo.setMinimumWidth(160)
+            self.effect_combo.setMinimumWidth(140)
             self.effect_combo.currentTextChanged.connect(self._on_effect_changed)
             ef.addWidget(self.effect_combo, 0, 1)
 
             ef.addWidget(QLabel("Tempo:"), 1, 0)
             self.efx_speed_combo = QComboBox()
             self.efx_speed_combo.addItems(list(EFFECT_SPEED_MAP.keys()))
-            self.efx_speed_combo.setMinimumWidth(160)
+            self.efx_speed_combo.setMinimumWidth(140)
             ef.addWidget(self.efx_speed_combo, 1, 1)
 
             effect_group.setLayout(ef)
             layout.addWidget(effect_group)
 
-            # ── Color Picker ──
-            color_group = QGroupBox("Farbe (funktioniert nur bei Static)")
-            cl = QHBoxLayout()
-            self.color_btn = QPushButton("🎨 Farbe wählen…")
-            self.color_btn.setMinimumWidth(140)
+            # ── Color Picker (kompakt) ──
+            color_row = QHBoxLayout()
+            color_row.setSpacing(6)
+            color_static = QLabel("🎨 Farbe:")
+            color_static.setStyleSheet("color: #999; font-size: 11px;")
+            color_row.addWidget(color_static)
+            self.color_btn = QPushButton("Auswählen…")
+            self.color_btn.setMinimumWidth(100)
+            self.color_btn.setStyleSheet("QPushButton { padding: 3px 8px; font-size: 11px; }")
             self.color_btn.clicked.connect(self._pick_color)
+            color_row.addWidget(self.color_btn)
             self.color_preview = QFrame()
-            self.color_preview.setFixedSize(36, 36)
+            self.color_preview.setFixedSize(28, 28)
             self.color_preview.setStyleSheet(
-                "background-color: rgb(255,100,0); border-radius: 6px; border: 2px solid #555;"
+                "background-color: rgb(255,100,0); border-radius: 4px; border: 2px solid #555;"
             )
             self.current_color = QColor(255, 100, 0)
-            cl.addWidget(self.color_btn)
-            cl.addWidget(self.color_preview)
-            cl.addStretch()
-            color_group.setLayout(cl)
-            layout.addWidget(color_group)
-
-            # ── Brightness ──
-            bright_group = QGroupBox("LED-Helligkeit")
-            bl = QHBoxLayout()
-            self.bright_slider = QSlider(Qt.Horizontal)
-            self.bright_slider.setRange(0, 100)
-            self.bright_slider.setValue(100)
-            self.bright_slider.setTickInterval(10)
-            self.bright_slider.setTickPosition(QSlider.TicksBelow)
-            self.bright_slider.valueChanged.connect(self._on_brightness_changed)
-            self.bright_label = QLabel("100%")
-            self.bright_label.setMinimumWidth(40)
-            self.bright_label.setStyleSheet("color: #e67e22; font-weight: bold;")
-            bl.addWidget(self.bright_slider)
-            bl.addWidget(self.bright_label)
-            bright_group.setLayout(bl)
-            layout.addWidget(bright_group)
-
-            # ── Apply ──
-            apply_btn = QPushButton("📤 Auf Kanal anwenden")
-            apply_btn.setStyleSheet(
-                "QPushButton { background-color: #e67e22; color: white; font-weight: bold; "
-                "padding: 8px; border-radius: 6px; font-size: 13px; }"
-                "QPushButton:hover { background-color: #d35400; }"
-            )
-            apply_btn.clicked.connect(self._apply)
-            layout.addWidget(apply_btn)
+            color_row.addWidget(self.color_preview)
+            color_row.addStretch()
+            layout.addLayout(color_row)
 
             layout.addStretch()
 

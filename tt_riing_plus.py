@@ -114,6 +114,7 @@ try:
         HAS_PSUTIL, HAS_PYQTGRAPH,
         DEFAULT_PROFILES, PROFILE_FILE,
         load_channel_descriptions, save_channel_descriptions,
+        get_sensor_description,
     )
     HAS_FEATURES = True
 except ImportError:
@@ -1389,8 +1390,8 @@ if HAS_QT:
             if HAS_FEATURES and self.auto_mode and self.auto_mode.available_sensors:
                 auto_group = QGroupBox("🌡 Auto-Modus")
                 auto_layout = QVBoxLayout()
-                auto_layout.setSpacing(3)
-                auto_layout.setContentsMargins(6, 3, 6, 3)
+                auto_layout.setSpacing(6)
+                auto_layout.setContentsMargins(6, 6, 6, 6)
 
                 # Row 1: Checkbox + Sensor dropdown + current temp
                 ctrl_row = QHBoxLayout()
@@ -1441,7 +1442,7 @@ if HAS_QT:
                 auto_layout.addWidget(self.sensor_table_label)
 
                 auto_group.setLayout(auto_layout)
-                auto_group.setMaximumHeight(85)
+                auto_group.setMinimumHeight(100)
                 global_vbox.addWidget(auto_group)
 
                 # Sensor live update timer (every 2s)
@@ -1634,7 +1635,9 @@ if HAS_QT:
             self.auto_sensor_combo.clear()
             readings = self.auto_mode.get_all_sensor_readings()
             for r in readings:
-                self.auto_sensor_combo.addItem(r['key'], r['key'])
+                desc = get_sensor_description(r['key'])
+                display_text = f"{desc}  ({r['key']})" if desc != r['key'] else r['key']
+                self.auto_sensor_combo.addItem(display_text, r['key'])
             # Restore selection if possible
             if self.auto_mode.current_sensor:
                 idx = self.auto_sensor_combo.findData(self.auto_mode.current_sensor)
@@ -1651,12 +1654,13 @@ if HAS_QT:
                 self.sensor_table_label.setText("Sensoren: Keine verfügbar")
                 return
 
-            # Compact single-line display of all sensors
+            # Compact single-line display of all sensors with descriptions
             parts = []
             for r in readings:
                 temp_str = f"{r['temp']:.1f}°C" if r['temp'] is not None else "N/A"
+                desc = get_sensor_description(r['key'])
                 marker = " ◀" if r['key'] == self.auto_mode.current_sensor else ""
-                parts.append(f"{r['key']}: {temp_str}{marker}")
+                parts.append(f"{desc}: {temp_str}{marker}")
             self.sensor_table_label.setText("Sensoren: " + " | ".join(parts))
 
             # Update current temp label

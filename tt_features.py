@@ -196,6 +196,55 @@ FAN_HYSTERESIS = 3
 AUTO_UPDATE_MS = 3000
 
 
+# Sensor name mapping: technical key -> human-readable description
+SENSOR_DESCRIPTIONS = {
+    # AMD
+    "k10temp": "AMD CPU (K10)",
+    "k10temp_Tctl": "AMD CPU Kontroll-Temperatur",
+    "k10temp_Tdie": "AMD CPU Die-Temperatur",
+    # Intel
+    "coretemp": "Intel CPU (Core)",
+    "coretemp_Package id 0": "Intel CPU Paket-Temperatur",
+    "coretemp_Core 0": "Intel CPU Kern 0",
+    "coretemp_Core 1": "Intel CPU Kern 1",
+    "coretemp_Core 2": "Intel CPU Kern 2",
+    "coretemp_Core 3": "Intel CPU Kern 3",
+    "coretemp_Core 4": "Intel CPU Kern 4",
+    "coretemp_Core 5": "Intel CPU Kern 5",
+    # ACPI / Board
+    "acpitz": "ACPI System-Temperatur",
+    "pch_cannonlake": "PCH Chipsatz (Intel)",
+    "pch_skylake": "PCH Chipsatz (Intel)",
+    # Generic
+    "SYSTIN": "System-Temperatur (Board)",
+    "TMPIN0": "Platinen-Temperatur 0",
+    "TMPIN1": "Platinen-Temperatur 1",
+    "amdgpu": "AMD GPU",
+    "amdgpu_edge": "AMD GPU Edge-Temperatur",
+    "amdgpu_junction": "AMD GPU Hotspot-Temperatur",
+    "amdgpu_hbm": "AMD GPU HBM-Temperatur",
+    "nouveau": "NVIDIA GPU (nouveau)",
+    "nvidia": "NVIDIA GPU",
+    "iwlwifi": "WLAN-Modul",
+    "nvme": "NVMe SSD",
+    "drivetemp": "Festplatte",
+    "intel_powerclamp": "Intel Power Limit",
+}
+
+
+def get_sensor_description(sensor_key: str) -> str:
+    """Return a human-readable description for a sensor key."""
+    # Direct match against known patterns
+    if sensor_key in SENSOR_DESCRIPTIONS:
+        return SENSOR_DESCRIPTIONS[sensor_key]
+    # Check partial matches
+    for pattern, desc in SENSOR_DESCRIPTIONS.items():
+        if pattern in sensor_key or sensor_key.startswith(pattern):
+            return desc
+    # Fallback: return cleaned key
+    return sensor_key.replace("_", " ").title()
+
+
 class AutoMode:
     """
     Temperature-based automatic fan control.

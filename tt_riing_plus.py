@@ -1389,19 +1389,20 @@ if HAS_QT:
             if HAS_FEATURES and self.auto_mode and self.auto_mode.available_sensors:
                 auto_group = QGroupBox("🌡 Auto-Modus")
                 auto_layout = QVBoxLayout()
-                auto_layout.setSpacing(4)
-                auto_layout.setContentsMargins(6, 4, 6, 4)
+                auto_layout.setSpacing(3)
+                auto_layout.setContentsMargins(6, 3, 6, 3)
 
                 # Row 1: Checkbox + Sensor dropdown + current temp
                 ctrl_row = QHBoxLayout()
+                ctrl_row.setSpacing(4)
                 self.auto_cb = QCheckBox("Auto-Modus aktiv")
                 self.auto_cb.stateChanged.connect(self._toggle_auto_mode)
                 ctrl_row.addWidget(self.auto_cb)
 
                 ctrl_row.addWidget(QLabel("Sensor:"))
                 self.auto_sensor_combo = QComboBox()
-                self.auto_sensor_combo.setMinimumWidth(180)
-                self.auto_sensor_combo.setMaximumWidth(280)
+                self.auto_sensor_combo.setMinimumWidth(140)
+                self.auto_sensor_combo.setMaximumWidth(200)
                 self._update_sensor_combo()
                 self.auto_sensor_combo.currentTextChanged.connect(self._change_auto_sensor)
                 ctrl_row.addWidget(self.auto_sensor_combo)
@@ -1431,10 +1432,12 @@ if HAS_QT:
                 ctrl_row.addStretch()
                 auto_layout.addLayout(ctrl_row)
 
-                # Row 2: All sensor readings (compact, single line)
+                # Row 2: All sensor readings (compact, single line, wordwrap off)
                 self.sensor_table_label = QLabel("Sensoren: …")
                 self.sensor_table_label.setStyleSheet("color: #888; font-size: 10px;")
                 self.sensor_table_label.setWordWrap(False)
+                self.sensor_table_label.setMinimumHeight(16)
+                self.sensor_table_label.setIndent(0)
                 auto_layout.addWidget(self.sensor_table_label)
 
                 auto_group.setLayout(auto_layout)

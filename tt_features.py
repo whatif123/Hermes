@@ -270,6 +270,8 @@ class AutoMode:
             self.tt_log("INFO", f"Auto-Modus: Sensor wiederhergestellt — {self._sensor_name}")
         if config.get("active") and self._sensor_name:
             self.tt_log("INFO", "Auto-Modus: Automatische Wiederherstellung beim nächsten Start aktiviert")
+
+    def _detect_sensors(self):
         """Detect available temperature sensors via psutil. Auto-selects AMD CPU sensor as default."""
         if not HAS_PSUTIL:
             return

@@ -1,0 +1,15 @@
+[Unit]
+Description=Thermaltake Riing Plus Fan and RGB Control
+After=graphical-session.target
+Requires=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/jamal/tt-riing-plus/tt-riing-plus.sh
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=graphical-session.target

@@ -1510,7 +1510,8 @@ if HAS_QT:
             self._setup_tray_icon()
             if self._tray_only:
                 self.hide()
-                self._tray_icon.show()
+                if self._tray_icon:
+                    self._tray_icon.show()
                 # Restore auto mode if it was active
                 if HAS_FEATURES and self.auto_mode and self.auto_mode._sensor_name:
                     config = _load_auto_config()
@@ -1521,6 +1522,10 @@ if HAS_QT:
                         self.auto_cb.setChecked(True)
                         self.statusBar().showMessage(
                             f"Auto-Modus wiederhergestellt — Sensor: {self.auto_mode._sensor_name}", 5000)
+            else:
+                # Always show tray icon so user can minimize to tray
+                if self._tray_icon:
+                    self._tray_icon.show()
 
         def _setup_tray_icon(self):
             """Create system tray icon with context menu."""
@@ -1925,7 +1930,7 @@ WantedBy=default.target
 
         def closeEvent(self, event):
             if hasattr(self, '_tray_icon') and self._tray_icon and self._tray_icon.isVisible():
-                # In tray mode: hide window instead of closing
+                # Always minimize to tray instead of closing
                 self.hide()
                 event.ignore()
                 return

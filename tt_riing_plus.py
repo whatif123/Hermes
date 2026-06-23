@@ -1518,6 +1518,7 @@ if HAS_QT:
                         self.auto_mode.start()
                         if hasattr(self, '_auto_timer'):
                             self._auto_timer.start(AUTO_UPDATE_MS)
+                        self.auto_cb.setChecked(True)
                         self.statusBar().showMessage(
                             f"Auto-Modus wiederhergestellt — Sensor: {self.auto_mode._sensor_name}", 5000)
 

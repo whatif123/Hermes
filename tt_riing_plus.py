@@ -51,6 +51,7 @@ try:
         QGroupBox, QGridLayout, QSpinBox, QTabWidget, QStatusBar,
         QCheckBox, QFrame, QScrollArea, QMessageBox, QFileDialog,
         QDialog, QTextEdit, QPlainTextEdit, QLineEdit,
+        QSystemTrayIcon, QMenu, QAction,
     )
     from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QObject
     from PyQt5.QtGui import QColor, QPainter, QBrush, QPen, QFont, QPixmap, QIcon
@@ -115,6 +116,7 @@ try:
         DEFAULT_PROFILES, PROFILE_FILE,
         load_channel_descriptions, save_channel_descriptions,
         get_sensor_description,
+        _load_auto_config, _save_auto_config,
     )
     HAS_FEATURES = True
 except ImportError:
@@ -1217,8 +1219,11 @@ if HAS_QT:
     class MainWindow(QMainWindow):
         """Thermaltake Riing Plus — Linux Control Centre."""
 
-        def __init__(self):
+        def __init__(self, tray_only=False):
             super().__init__()
+            self._tray_only = tray_only
+            self._tray_icon = None
+            self._tray_menu = None
             self.controller = TTController(test_mode=False)
 
             if self.controller.test_mode:
@@ -1453,6 +1458,8 @@ if HAS_QT:
                     "color: #3498db; font-weight: bold; font-size: 14px; min-width: 50px;")
                 ctrl_row.addWidget(self.auto_fan_label)
 
+                ctrl_row.addStretch()
+
                 # Auto-Start switch
                 self.autostart_btn = QPushButton("🔄 Aus")
                 self.autostart_btn.setToolTip("Auto-Start beim Systemstart aktivieren/deaktivieren")
@@ -1462,8 +1469,6 @@ if HAS_QT:
                 )
                 self.autostart_btn.clicked.connect(self._toggle_autostart)
                 ctrl_row.addWidget(self.autostart_btn)
-
-                ctrl_row.addStretch()
                 auto_layout.addLayout(ctrl_row)
 
                 # Row 2: All sensor readings (compact, single line, wordwrap off)
@@ -1500,6 +1505,63 @@ if HAS_QT:
                 self._history_timer = QTimer(self)
                 self._history_timer.timeout.connect(self._history_tick)
                 self._history_timer.start(3000)  # 3s interval
+
+            # ── Tray Icon ──
+            self._setup_tray_icon()
+            if self._tray_only:
+                self.hide()
+                self._tray_icon.show()
+                # Restore auto mode if it was active
+                if HAS_FEATURES and self.auto_mode and self.auto_mode._sensor_name:
+                    config = _load_auto_config()
+                    if config.get("active"):
+                        self.auto_mode.start()
+                        if hasattr(self, '_auto_timer'):
+                            self._auto_timer.start(AUTO_UPDATE_MS)
+                        self.statusBar().showMessage(
+                            f"Auto-Modus wiederhergestellt — Sensor: {self.auto_mode._sensor_name}", 5000)
+
+        def _setup_tray_icon(self):
+            """Create system tray icon with context menu."""
+            if not QSystemTrayIcon.isSystemTrayAvailable():
+                self._tray_icon = None
+                return
+            # Use a simple colored icon (orange circle as fallback)
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(Qt.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setBrush(QBrush(QColor(230, 126, 34)))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(2, 2, 28, 28)
+            painter.setPen(QPen(Qt.white, 2))
+            painter.setFont(QFont("Sans", 10, QFont.Bold))
+            painter.drawText(pixmap.rect(), Qt.AlignCenter, "TT")
+            painter.end()
+            tray_icon = QIcon(pixmap)
+            self._tray_icon = QSystemTrayIcon(tray_icon, self)
+            self._tray_icon.setToolTip("Thermaltake Riing Plus")
+            # Tray menu
+            self._tray_menu = QMenu()
+            show_action = QAction("Öffnen", self)
+            show_action.triggered.connect(self.show)
+            self._tray_menu.addAction(show_action)
+            self._tray_menu.addSeparator()
+            quit_action = QAction("Beenden", self)
+            quit_action.triggered.connect(self._tray_quit)
+            self._tray_menu.addAction(quit_action)
+            self._tray_icon.setContextMenu(self._tray_menu)
+            self._tray_icon.activated.connect(self._tray_activated)
+
+        def _tray_activated(self, reason):
+            if reason == QSystemTrayIcon.DoubleClick:
+                self.show()
+                self.raise_()
+                self.activateWindow()
+
+        def _tray_quit(self):
+            self._tray_icon.hide()
+            QApplication.quit()
 
         def _make_tab_label(self, ch: int, desc: str) -> str:
             """Generate tab label: 'CH 1 — CPU Radiator' or 'CH 1' if no description."""
@@ -1775,8 +1837,10 @@ if HAS_QT:
                     f"Manuell: {venv_pip} install pyqtgraph")
 
         def _toggle_autostart(self):
-            """Toggle systemd user service for auto-start."""
+            """Toggle systemd user service for auto-start (tray mode)."""
             import subprocess
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            main_script = os.path.join(script_dir, "tt_riing_plus.py")
             try:
                 result = subprocess.run(
                     ["systemctl", "--user", "is-enabled", "tt-riing-plus.service"],
@@ -1792,6 +1856,26 @@ if HAS_QT:
                         "border-radius: 4px; font-size: 11px; max-width: 60px; }")
                     self.statusBar().showMessage("Auto-Start deaktiviert", 3000)
                 else:
+                    # Create systemd user service that starts in tray mode
+                    service_content = f"""[Unit]
+Description=Thermaltake Riing Plus Control (Tray)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 {main_script} --tray
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+"""
+                    service_path = os.path.join(
+                        os.path.expanduser("~"), ".config", "systemd", "user", "tt-riing-plus.service")
+                    os.makedirs(os.path.dirname(service_path), exist_ok=True)
+                    with open(service_path, "w") as f:
+                        f.write(service_content)
+                    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, timeout=5)
                     subprocess.run(
                         ["systemctl", "--user", "enable", "--now", "tt-riing-plus.service"],
                         check=True, timeout=5)
@@ -1799,7 +1883,7 @@ if HAS_QT:
                     self.autostart_btn.setStyleSheet(
                         "QPushButton { background: #27ae60; color: white; padding: 4px 10px; "
                         "border-radius: 4px; font-size: 11px; max-width: 60px; }")
-                    self.statusBar().showMessage("Auto-Start aktiviert", 3000)
+                    self.statusBar().showMessage("Auto-Start aktiviert (Tray)", 3000)
             except Exception as e:
                 QMessageBox.warning(self, "Auto-Start",
                     f"Konnte systemd Service nicht ändern:\n{e}")
@@ -1839,7 +1923,11 @@ if HAS_QT:
                         self.auto_fan_label.setText(f"Fan: {result['fan_speed']}%")
 
         def closeEvent(self, event):
-            # Stop timers
+            if hasattr(self, '_tray_icon') and self._tray_icon and self._tray_icon.isVisible():
+                # In tray mode: hide window instead of closing
+                self.hide()
+                event.ignore()
+                return
             if hasattr(self, '_auto_timer'):
                 self._auto_timer.stop()
             if hasattr(self, '_history_timer'):
@@ -1855,6 +1943,8 @@ if HAS_QT:
                         descs[str(ch)] = d
                 save_channel_descriptions(descs)
             self.controller.close()
+            if hasattr(self, '_tray_icon') and self._tray_icon:
+                self._tray_icon.hide()
             event.accept()
 
 
@@ -1866,15 +1956,21 @@ def main():
         app = QApplication(sys.argv)
         app.setApplicationName("Thermaltake Riing Plus Control")
         app.setApplicationVersion("2.0.0")
+        # Prevent app from closing when main window is hidden to tray
+        app.setQuitOnLastWindowClosed(False)
     except Exception as e:
         _print_startup_diag(f"Qt-Init fehlgeschlagen: {e}")
         sys.exit(1)
 
     _system_check()
 
+    # Determine startup mode: tray-only (autostart) or normal window
+    tray_only = "--tray" in sys.argv
+
     try:
-        window = MainWindow()
-        window.show()
+        window = MainWindow(tray_only=tray_only)
+        if not tray_only:
+            window.show()
     except Exception as e:
         import traceback
         tb = traceback.format_exc()

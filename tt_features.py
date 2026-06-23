@@ -259,9 +259,18 @@ class AutoMode:
         self._sensor_name = None
         self._available_sensors = {}
         self._detect_sensors()
+        # Restore persisted state
+        self._restore_auto_config()
 
-    def _detect_sensors(self):
-        """Detect available temperature sensors via psutil. Does NOT auto-pick one."""
+    def _restore_auto_config(self):
+        """Restore auto mode state from config file."""
+        config = _load_auto_config()
+        if config.get("sensor") and config["sensor"] in self._available_sensors:
+            self._sensor_name = config["sensor"]
+            self.tt_log("INFO", f"Auto-Modus: Sensor wiederhergestellt — {self._sensor_name}")
+        if config.get("active") and self._sensor_name:
+            self.tt_log("INFO", "Auto-Modus: Automatische Wiederherstellung beim nächsten Start aktiviert")
+        """Detect available temperature sensors via psutil. Auto-selects AMD CPU sensor as default."""
         if not HAS_PSUTIL:
             return
 
@@ -277,6 +286,28 @@ class AutoMode:
                     self._available_sensors[key] = (label, entry.label or key)
 
             self.tt_log("INFO", f"Auto-Modus: {len(self._available_sensors)} Sensoren gefunden")
+
+            # Auto-select AMD CPU sensor as default (prefer k10temp_Tctl > k10temp_Tdie > any k10temp)
+            if not self._sensor_name:
+                amd_candidates = [k for k in self._available_sensors if 'k10temp' in k.lower()]
+                if amd_candidates:
+                    # Prefer Tctl, then Tdie, then any k10temp
+                    for candidate in amd_candidates:
+                        if 'tctl' in candidate.lower():
+                            self._sensor_name = candidate
+                            break
+                    if not self._sensor_name:
+                        for candidate in amd_candidates:
+                            if 'tdie' in candidate.lower():
+                                self._sensor_name = candidate
+                                break
+                    if not self._sensor_name:
+                        self._sensor_name = amd_candidates[0]
+                    self.tt_log("INFO", f"Auto-Modus: Default-Sensor gewählt — {self._sensor_name}")
+                elif self._available_sensors:
+                    # Fallback: first available sensor
+                    self._sensor_name = list(self._available_sensors.keys())[0]
+                    self.tt_log("INFO", f"Auto-Modus: Default-Sensor gewählt — {self._sensor_name}")
 
         except Exception as e:
             self.tt_log("WARNING", f"Auto-Modus: Sensor-Erkennung fehlgeschlagen: {e}")
@@ -394,18 +425,40 @@ class AutoMode:
             return False
         self.active = True
         self._last_fan_speed = None
+        _save_auto_config(True, self._sensor_name)
         self.tt_log("INFO", f"Auto-Modus AKTIV — Sensor: {self._sensor_name}")
         return True
 
     def stop(self):
         """Disable auto mode."""
         self.active = False
+        _save_auto_config(False, self._sensor_name)
         self.tt_log("INFO", "Auto-Modus DEAKTIVIERT")
 
 
-# ── History / Graph ──────────────────────────────────
+# ── AutoMode Persistence ─────────────────────────────
+AUTO_CONFIG_FILE = os.path.join(PROFILE_DIR, "auto_mode.json")
 
-# Ring buffer: 1 hour at 1 sample/3s = 1200 points
+
+def _load_auto_config() -> dict:
+    """Load auto mode state from config file."""
+    try:
+        if os.path.exists(AUTO_CONFIG_FILE):
+            with open(AUTO_CONFIG_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_auto_config(active: bool, sensor: str | None):
+    """Save auto mode state to config file."""
+    try:
+        os.makedirs(PROFILE_DIR, exist_ok=True)
+        with open(AUTO_CONFIG_FILE, "w") as f:
+            json.dump({"active": active, "sensor": sensor}, f)
+    except Exception:
+        pass
 HISTORY_SECONDS = 3600
 HISTORY_MAX_POINTS = HISTORY_SECONDS // 3
 

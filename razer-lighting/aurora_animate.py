@@ -91,19 +91,19 @@ ANIMATIONS = {
         "name": "Aurora Borealis",
         "description": "Animierte Aurora-Welle: Dunkelblau → Lila → Grün → Magenta",
         "stops": AURORA_COLORS,
-        "speed": 0.04,
+        "speed": 0.012,
     },
     "fire_wave": {
         "name": "Fire",
         "description": "Feurige Welle: Rot → Orange → Gelb",
         "stops": FIRE_COLORS,
-        "speed": 0.05,
+        "speed": 0.015,
     },
     "ocean_wave": {
         "name": "Ocean",
         "description": "Ozean-Welle: Tiefblau → Cyan → Hellblau",
         "stops": OCEAN_COLORS,
-        "speed": 0.04,
+        "speed": 0.012,
     },
 }
 

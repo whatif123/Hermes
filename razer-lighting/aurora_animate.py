@@ -171,20 +171,17 @@ class AuroraEngine:
 
         for row in range(rows):
             for col in range(cols):
-                # Position im Farbverlauf: wellenförmig über die Spalten
                 pos = ((col / cols) + phase) % 1.0
-
-                # Zeilen leicht versetzen für Tiefenwirkung
                 row_offset = row * 0.03
                 pos = (pos + row_offset) % 1.0
-
                 rgb = Color.gradient(self.anim["stops"], pos)
                 frame.set(row, col, rgb)
 
-        self.keyboard.fx.advanced.draw()
+        # draw_with_fb_or statt draw um Flackern zu vermeiden
+        frame.draw_with_fb_or()
 
     def _render_mouse(self, phase):
-        """Maus-Ring + Logo/Scroll mit Farbverlauf rendern."""
+        """Maus-Ring mit Farbverlauf rendern. Logo/Scroll nur selten aktualisieren."""
         if not self.mouse:
             return
         frame = self.mouse.fx.advanced.matrix
@@ -195,9 +192,13 @@ class AuroraEngine:
             rgb = Color.gradient(self.anim["stops"], pos)
             frame.set(0, col, rgb)
 
-        self.mouse.fx.advanced.draw()
+        # draw_with_fb_or statt draw
+        frame.draw_with_fb_or()
 
-        # Logo & Scroll auf dominante Farbe setzen
+    def _update_mouse_statics(self, phase):
+        """Logo & Scrollrad setzen (nur alle ~2s, um Flackern zu vermeiden)."""
+        if not self.mouse:
+            return
         dom_pos = (phase + 0.3) % 1.0
         dom_rgb = Color.gradient(self.anim["stops"], dom_pos)
         try:
@@ -223,12 +224,19 @@ class AuroraEngine:
         print(f"  FPS: {fps}  |  Drücke Ctrl+C zum Beenden\n")
 
         try:
+            mouse_static_timer = 0.0
             while self._running:
                 loop_start = time.time()
                 frames += 1
 
                 self._render_keyboard(self._phase)
                 self._render_mouse(self._phase)
+
+                # Logo/Scroll nur alle 2s aktualisieren (gegen Flackern)
+                mouse_static_timer += interval
+                if mouse_static_timer >= 2.0:
+                    self._update_mouse_statics(self._phase)
+                    mouse_static_timer = 0.0
 
                 self._phase = (self._phase + speed) % 1.0
 
@@ -288,7 +296,7 @@ def main():
         help="Animation (default: aurora_wave)"
     )
     parser.add_argument("--list", action="store_true", help="Animationen auflisten")
-    parser.add_argument("--fps", type=int, default=24, help="FPS (default: 24)")
+    parser.add_argument("--fps", type=int, default=12, help="FPS (default: 12)")
     parser.add_argument("--duration", type=float, default=None, help="Laufzeit in Sek.")
     parser.add_argument("--speed", type=float, default=None,
                         help="Geschwindigkeit überschreiben (0.001=langsam, 0.01=schnell)")

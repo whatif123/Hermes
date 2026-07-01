@@ -177,8 +177,8 @@ class AuroraEngine:
                 rgb = Color.gradient(self.anim["stops"], pos)
                 frame.set(row, col, rgb)
 
-        # draw_with_fb_or statt draw um Flackern zu vermeiden
-        frame.draw_with_fb_or()
+        # Reset + draw_with_fb_or = sauberer Frame ohne Flackern
+        self.keyboard.fx.advanced.draw()
 
     def _render_mouse(self, phase):
         """Maus-Ring mit Farbverlauf rendern. Logo/Scroll nur selten aktualisieren."""
@@ -192,8 +192,8 @@ class AuroraEngine:
             rgb = Color.gradient(self.anim["stops"], pos)
             frame.set(0, col, rgb)
 
-        # draw_with_fb_or statt draw
-        frame.draw_with_fb_or()
+        # Reset + draw = sauberer Frame
+        self.mouse.fx.advanced.draw()
 
     def _update_mouse_statics(self, phase):
         """Logo & Scrollrad setzen (nur alle ~2s, um Flackern zu vermeiden)."""

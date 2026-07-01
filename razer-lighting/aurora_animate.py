@@ -114,11 +114,12 @@ ANIMATIONS = {
 class AuroraEngine:
     """Steuert Tastatur + Maus gleichzeitig mit eigener Animation."""
 
-    def __init__(self, animation="aurora_wave"):
+    def __init__(self, animation="aurora_wave", custom_speed=None):
         self.anim = ANIMATIONS.get(animation)
         if not self.anim:
             raise ValueError(f"Unbekannte Animation: {animation}")
 
+        self._custom_speed = custom_speed
         self._import_openrazer()
         self._init_devices()
         self._phase = 0.0
@@ -212,7 +213,7 @@ class AuroraEngine:
         duration: Sekunden (None = endlos bis Ctrl+C)
         """
         self._running = True
-        speed = self.anim["speed"]
+        speed = self._custom_speed if self._custom_speed is not None else self.anim["speed"]
         interval = 1.0 / fps
         start = time.time()
         frames = 0
@@ -289,6 +290,8 @@ def main():
     parser.add_argument("--list", action="store_true", help="Animationen auflisten")
     parser.add_argument("--fps", type=int, default=24, help="FPS (default: 24)")
     parser.add_argument("--duration", type=float, default=None, help="Laufzeit in Sek.")
+    parser.add_argument("--speed", type=float, default=None,
+                        help="Geschwindigkeit überschreiben (0.001=langsam, 0.01=schnell)")
 
     args = parser.parse_args()
 
@@ -305,7 +308,7 @@ def main():
         list_animations()
         sys.exit(1)
 
-    engine = AuroraEngine(args.animation)
+    engine = AuroraEngine(args.animation, custom_speed=args.speed)
     engine.run(fps=args.fps, duration=args.duration)
 
 

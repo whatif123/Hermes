@@ -256,6 +256,7 @@ class AutoMode:
         self.tt_log = tt_log
         self.active = False
         self._last_fan_speed = None
+        self._smoothed_temp = None  # EMA-geglättete Temperatur
         self._sensor_name = None
         self._available_sensors = {}
         self._detect_sensors()
@@ -390,17 +391,34 @@ class AutoMode:
 
     def tick(self) -> dict | None:
         """
-        One update cycle: read temp, calc speed, send if changed.
+        One update cycle: read temp, smooth (EMA), calc speed,
+        apply ramp-rate limiting, send if changed.
         Returns dict with temp/speed info or None on error.
         """
         if not self.active:
             return None
 
-        temp = self.get_temperature()
-        if temp is None:
+        raw_temp = self.get_temperature()
+        if raw_temp is None:
             return None
 
-        target_speed = self.calc_fan_speed(temp)
+        # ── Temperatur-Glättung (EMA) ──
+        if self._smoothed_temp is None:
+            self._smoothed_temp = raw_temp
+        else:
+            self._smoothed_temp = (
+                TEMP_ALPHA * raw_temp + (1 - TEMP_ALPHA) * self._smoothed_temp
+            )
+        smooth_temp = self._smoothed_temp
+
+        target_speed = self.calc_fan_speed(smooth_temp)
+
+        # ── Ramp-Raten-Begrenzung ──
+        if self._last_fan_speed is not None:
+            if target_speed > self._last_fan_speed:
+                target_speed = min(target_speed, self._last_fan_speed + RAMP_UP_MAX)
+            elif target_speed < self._last_fan_speed:
+                target_speed = max(target_speed, self._last_fan_speed - RAMP_DOWN_MAX)
 
         # Hysteresis: only send if change is significant
         if (self._last_fan_speed is None or
@@ -409,10 +427,11 @@ class AutoMode:
                 self.controller.set_speed(ch, target_speed)
             self._last_fan_speed = target_speed
             self.tt_log("INFO",
-                        f"Auto-Modus: {temp:.1f}°C → {target_speed}% (Δ{FAN_HYSTERESIS}%)")
+                        f"Auto-Modus: {smooth_temp:.1f}°C (roh:{raw_temp:.1f}) → {target_speed}%")
 
         return {
-            "temp": temp,
+            "temp": raw_temp,
+            "smooth_temp": smooth_temp,
             "fan_speed": target_speed,
             "sensor": self._sensor_name,
         }
@@ -437,6 +456,16 @@ class AutoMode:
         _save_auto_config(False, self._sensor_name)
         self.tt_log("INFO", "Auto-Modus DEAKTIVIERT")
 
+
+# ── Hysteresis / Ramp-Raten ──────────────────────────
+
+# Temperatur-Glättung: EMA-Faktor (0.0–1.0)
+# Niedriger = glatter, aber träger. 0.3 = 70% Historie, 30% neuer Wert
+TEMP_ALPHA = 0.3
+
+# Ramp-Raten: maximale RPM-Änderung pro Tick (3s)
+RAMP_UP_MAX = 8     # max +8% pro Tick — langsamere Beschleunigung
+RAMP_DOWN_MAX = 4   # max -4% pro Tick — noch langsameres Abkühlen
 
 # ── AutoMode Persistence ─────────────────────────────
 AUTO_CONFIG_FILE = os.path.join(PROFILE_DIR, "auto_mode.json")
